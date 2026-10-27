@@ -1,0 +1,928 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard - Control de Averías de Mantenimiento</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Chart.js & Plugins -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@2.0.1/dist/chartjs-plugin-annotation.min.js"></script>
+    <!-- SheetJS (XLSX Reader) -->
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        brand: {
+                            dark: '#0f172a',
+                            card: '#1e293b',
+                            border: '#334155',
+                            accent: '#2563eb',
+                            accentHover: '#1d4ed8',
+                            success: '#10b981',
+                            warning: '#f59e0b',
+                            danger: '#ef4444'
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body { font-family: 'Inter', system-ui, -apple-system, sans-serif; background-color: #0f172a; color: #f8fafc; }
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: #1e293b; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #475569; border-radius: 3px; }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col custom-scrollbar">
+
+    <!-- 1. BANNER EJECUTIVO DE ENCABEZADO -->
+    <header class="bg-brand-card border-b border-brand-border px-6 py-4 sticky top-0 z-50 shadow-lg">
+        <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div class="flex items-center gap-3">
+                <div class="p-2.5 bg-blue-600/20 text-blue-500 rounded-xl border border-blue-500/30">
+                    <i data-lucide="wrench" class="w-7 h-7"></i>
+                </div>
+                <div>
+                    <h1 class="text-xl font-bold text-white tracking-wide">Dashboard - Control de Averías de Mantenimiento</h1>
+                    <p class="text-xs text-slate-400 flex items-center gap-2 mt-0.5">
+                        <span class="inline-block w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                        Última actualización: <span id="lastUpdateDate">22/09/2026</span> | Alcance: <span class="text-blue-400 font-semibold">PM01, PM02, PM03</span>
+                    </p>
+                </div>
+            </div>
+
+            <!-- Botón Cargar Base de Datos / Reset -->
+            <div class="flex items-center gap-3">
+                <label class="cursor-pointer bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold px-4 py-2.5 rounded-lg border border-blue-500/50 shadow-md transition flex items-center gap-2">
+                    <i data-lucide="upload" class="w-4 h-4"></i>
+                    <span>Cargar Nueva Data (Excel/CSV)</span>
+                    <input type="file" id="fileInput" accept=".xlsx, .xls, .csv" class="hidden">
+                </label>
+                <button onclick="resetFilters()" class="bg-slate-700 hover:bg-slate-600 text-slate-200 text-xs font-medium px-3 py-2.5 rounded-lg border border-slate-600 transition flex items-center gap-1.5" title="Restablecer Filtros">
+                    <i data-lucide="refresh-cw" class="w-4 h-4"></i>
+                    <span>Reset</span>
+                </button>
+
+                <button onclick="toggleTheme()" class="p-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg border border-slate-700 transition-colors" title="Cambiar Tema">
+                    <i data-lucide="sun" id="theme-icon" class="w-4 h-4"></i>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- MAIN CONTENT -->
+    <div class="flex-1 flex flex-col lg:flex-row gap-4 p-4 md:p-6">
+        
+        <!-- 3. PANEL LATERAL DE SEGMENTADORES Y FILTROS -->
+        <aside class="w-full lg:w-72 bg-brand-card border border-brand-border rounded-xl p-4 flex flex-col gap-5 shrink-0">
+            <div class="flex items-center justify-between border-b border-brand-border pb-3">
+                <h2 class="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
+                    <i data-lucide="filter" class="w-4 h-4 text-blue-400"></i> Filtros Dinámicos
+                </h2>
+                <span id="activeFilterBadge" class="text-[10px] bg-blue-500/20 text-blue-300 border border-blue-500/30 px-2 py-0.5 rounded-full hidden">Filtros Activos</span>
+            </div>
+
+            <!-- Segmentador: Tipo de Mantenimiento -->
+            <div>
+                <label class="text-xs font-medium text-slate-300 mb-2 block">Tipo Mantenimiento</label>
+                <div class="grid grid-cols-3 gap-1.5" id="pmFilterGroup">
+                    <button onclick="togglePMFilter('PM01')" id="btn-PM01" class="pm-btn text-xs py-1.5 px-2 rounded font-semibold border border-slate-600 bg-slate-800 text-slate-300 hover:border-blue-500 transition">PM01</button>
+                    <button onclick="togglePMFilter('PM02')" id="btn-PM02" class="pm-btn text-xs py-1.5 px-2 rounded font-semibold border border-slate-600 bg-slate-800 text-slate-300 hover:border-blue-500 transition">PM02</button>
+                    <button onclick="togglePMFilter('PM03')" id="btn-PM03" class="pm-btn text-xs py-1.5 px-2 rounded font-semibold border border-slate-600 bg-slate-800 text-slate-300 hover:border-blue-500 transition">PM03</button>
+                </div>
+            </div>
+
+            <!-- Segmentador: Línea de Tiempo (Revision) -->
+            <div>
+                <label class="text-xs font-medium text-slate-300 mb-1.5 block">Revisión / Período</label>
+                <select id="selectRevision" onchange="applyFilters()" class="w-full bg-slate-900 border border-slate-700 text-slate-200 text-xs rounded-lg p-2.5 focus:ring-1 focus:ring-blue-500 focus:outline-none custom-scrollbar">
+                    <option value="">Todas las Revisiones</option>
+                </select>
+            </div>
+
+            <!-- Segmentador: Planta -->
+            <div>
+                <label class="text-xs font-medium text-slate-300 mb-1.5 block">Sede / Planta</label>
+                <select id="selectPlanta" onchange="applyFilters()" class="w-full bg-slate-900 border border-slate-700 text-slate-200 text-xs rounded-lg p-2.5 focus:ring-1 focus:ring-blue-500 focus:outline-none">
+                    <option value="">Todas las Plantas</option>
+                </select>
+            </div>
+
+            <!-- Segmentador: Categoría de Equipo -->
+            <div>
+                <label class="text-xs font-medium text-slate-300 mb-1.5 block">Categoría de Equipo</label>
+                <select id="selectCategoria" onchange="applyFilters()" class="w-full bg-slate-900 border border-slate-700 text-slate-200 text-xs rounded-lg p-2.5 focus:ring-1 focus:ring-blue-500 focus:outline-none">
+                    <option value="">Todas las Categorías</option>
+                </select>
+            </div>
+
+            <!-- Segmentador: Material o Servicio -->
+            <div>
+                <label class="text-xs font-medium text-slate-300 mb-1.5 block">Tipo de Insumo</label>
+                <div class="grid grid-cols-2 gap-2">
+                    <button onclick="toggleMatServ('Material')" id="btn-Mat" class="matserv-btn text-xs py-1.5 px-2 rounded border border-slate-700 bg-slate-900 text-slate-300">Materiales</button>
+                    <button onclick="toggleMatServ('Servicio')" id="btn-Serv" class="matserv-btn text-xs py-1.5 px-2 rounded border border-slate-700 bg-slate-900 text-slate-300">Servicios</button>
+                </div>
+            </div>
+            
+            <div class="mt-auto pt-4 border-t border-brand-border text-[11px] text-slate-400 text-center">
+                Maintenance Analytics - Junior Zanabria C.
+            </div>
+        </aside>
+
+        <!-- DASHBOARD BODY CONTAINER -->
+        <main class="flex-1 flex flex-col gap-5 overflow-x-hidden">
+            
+            <!-- TARJETAS KPI & GAUGE & SMART INSIGHTS -->
+            <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+                
+                <!-- KPI 1 -->
+                <div class="bg-brand-card border border-brand-border rounded-xl p-4 flex flex-col justify-between shadow-sm relative overflow-hidden">
+                    <div class="flex items-center justify-between">
+                        <span class="text-xs font-medium text-slate-400">Gasto Total (Precio_R)</span>
+                        <span class="p-1.5 bg-blue-500/10 text-blue-400 rounded-md"><i data-lucide="dollar-sign" class="w-4 h-4"></i></span>
+                    </div>
+                    <div class="mt-2">
+                        <div class="text-2xl font-bold text-white tracking-tight" id="kpi-total-cost">$ 3.78M</div>
+                        <div class="text-[11px] text-emerald-400 flex items-center gap-1 mt-1">
+                            <i data-lucide="trending-up" class="w-3 h-3"></i> 100% Presupuesto Ejecutado
+                        </div>
+                    </div>
+                    <div class="h-10 mt-2">
+                        <canvas id="sparklineChart"></canvas>
+                    </div>
+                </div>
+
+                <!-- KPI 2 -->
+                <div class="bg-brand-card border border-brand-border rounded-xl p-4 flex flex-col justify-between shadow-sm">
+                    <div class="flex items-center justify-between">
+                        <span class="text-xs font-medium text-slate-400">Costo Promedio / Orden</span>
+                        <span class="p-1.5 bg-emerald-500/10 text-emerald-400 rounded-md"><i data-lucide="calculator" class="w-4 h-4"></i></span>
+                    </div>
+                    <div class="mt-2">
+                        <div class="text-2xl font-bold text-white tracking-tight" id="kpi-avg-cost">$ 156.54</div>
+                        <p class="text-[11px] text-slate-400 mt-1">Por intervención registrada</p>
+                    </div>
+                    <div class="w-full bg-slate-700 h-1.5 rounded-full mt-4 overflow-hidden">
+                        <div class="bg-emerald-500 h-full" style="width: 65%"></div>
+                    </div>
+                </div>
+
+                <!-- KPI 3 -->
+                <div class="bg-brand-card border border-brand-border rounded-xl p-4 flex flex-col justify-between shadow-sm">
+                    <div class="flex items-center justify-between">
+                        <span class="text-xs font-medium text-slate-400">Total Intervenciones (N)</span>
+                        <span class="p-1.5 bg-purple-500/10 text-purple-400 rounded-md"><i data-lucide="activity" class="w-4 h-4"></i></span>
+                    </div>
+                    <div class="mt-2">
+                        <div class="text-2xl font-bold text-white tracking-tight" id="kpi-total-orders">24,179</div>
+                        <p class="text-[11px] text-purple-300 mt-1">Órdenes PM01, PM02, PM03</p>
+                    </div>
+                    <div class="flex gap-1 text-[10px] text-slate-400 mt-4">
+                        <span class="text-amber-400 font-semibold" id="kpi-pm01-cnt">PM01: 1,884</span> | 
+                        <span class="text-blue-400 font-semibold" id="kpi-pm02-cnt">PM02: 12,675</span> | 
+                        <span class="text-emerald-400 font-semibold" id="kpi-pm03-cnt">PM03: 9,620</span>
+                    </div>
+                </div>
+
+                <!-- KPI 4: Gauge / Concentración Pareto -->
+                <div class="bg-brand-card border border-brand-border rounded-xl p-4 flex flex-col justify-between shadow-sm">
+                    <div class="flex items-center justify-between">
+                        <span class="text-xs font-medium text-slate-400">Concentración Pareto (Top 20%)</span>
+                        <span class="p-1.5 bg-amber-500/10 text-amber-400 rounded-md"><i data-lucide="pie-chart" class="w-4 h-4"></i></span>
+                    </div>
+                    <div class="flex items-center justify-between mt-1">
+                        <div>
+                            <div class="text-2xl font-bold text-amber-400" id="gaugePct">68.4%</div>
+                            <span class="text-[10px] text-slate-400">del gasto en Top Categorías</span>
+                        </div>
+                        <div class="w-16 h-16 relative">
+                            <canvas id="gaugeChart"></canvas>
+                        </div>
+                    </div>
+                    <div class="text-[10px] text-slate-400 mt-2 border-t border-slate-700/50 pt-1.5">
+                        Alta criticidad financiera focalizada
+                    </div>
+                </div>
+            </div>
+
+            <!-- MODULO SMART INSIGHTS AUTOMATICO -->
+            <div class="bg-gradient-to-r from-blue-900/40 via-slate-800 to-brand-card border border-blue-500/30 rounded-xl p-4 shadow-md flex items-start gap-3">
+                <div class="p-2 bg-blue-500/20 text-blue-400 rounded-lg shrink-0 mt-0.5">
+                    <i data-lucide="sparkles" class="w-5 h-5"></i>
+                </div>
+                <div>
+                    <h3 class="text-xs font-bold text-blue-300 uppercase tracking-wider">Smart Insights (IA Mantenimiento)</h3>
+                    <p class="text-xs text-slate-200 mt-1 leading-relaxed" id="smartInsightText">
+                        La categoría <strong class="text-white">BOMBA</strong> representa el mayor gasto acumulado en <span class="text-blue-300 font-mono">Precio_R</span> con <strong class="text-amber-400">$ 464.9K USD</strong> distribuido entre PM01, PM02 y PM03. El 51.5% del presupuesto general está concentrado en Mantenimiento Preventivo (PM02).
+                    </p>
+                </div>
+            </div>
+
+            <!-- SECCIÓN DE GRÁFICOS - FILA 1 -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
+                
+                <!-- 1. Diagrama de Pareto -->
+                <div class="bg-brand-card border border-brand-border rounded-xl p-4 shadow-sm flex flex-col">
+                    <div class="flex items-center justify-between mb-3">
+                        <h3 class="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-2">
+                            <i data-lucide="bar-chart-2" class="w-4 h-4 text-blue-400"></i> Pareto de Costos por Categoría (80/20)
+                        </h3>
+                        <span class="text-[10px] text-slate-400">Precio_R Acumulado</span>
+                    </div>
+                    <div class="flex-1 min-h-[280px]">
+                        <canvas id="paretoChart"></canvas>
+                    </div>
+                </div>
+
+                <!-- 2. Matriz Jack-Knife -->
+                <div class="bg-brand-card border border-brand-border rounded-xl p-4 shadow-sm flex flex-col">
+                    <div class="flex items-center justify-between mb-3">
+                        <h3 class="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-2">
+                            <i data-lucide="target" class="w-4 h-4 text-emerald-400"></i> Matriz Jack-Knife (Frecuencia vs Costo Medio)
+                        </h3>
+                        <span class="text-[10px] text-slate-400">4 Cuadrantes de Criticidad</span>
+                    </div>
+
+                <!-- Legend Cuadrantes -->
+                <div class="grid grid-cols-4 gap-1 text-[10px] text-center mb-2">
+                    <span class="bg-rose-500/20 text-rose-300 py-0.5 px-1 rounded border border-rose-500/30">I. Crítico (Rediseño/RCM)</span>
+                    <span class="bg-amber-500/20 text-amber-300 py-0.5 px-1 rounded border border-amber-500/30">II. Agudo (Análisis RCA)</span>
+                    <span class="bg-sky-500/20 text-sky-300 py-0.5 px-1 rounded border border-sky-500/30">III. Crónico (SOP/TPM)</span>
+                    <span class="bg-green-700/50 text-slate-300 py-0.5 px-1 rounded border border-slate-600/30">IV. Bajo Impacto</span>
+                </div>
+                    <div class="flex-1 min-h-[280px]">
+                        <canvas id="jackKnifeChart"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <!-- SECCIÓN DE GRÁFICOS - FILA 2 -->
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-5">
+                
+                <!-- 3. Evolución Temporal -->
+                <div class="lg:col-span-2 bg-brand-card border border-brand-border rounded-xl p-4 shadow-sm flex flex-col">
+                    <div class="flex items-center justify-between mb-3">
+                        <h3 class="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-2">
+                            <i data-lucide="line-chart" class="w-4 h-4 text-purple-400"></i> Evolución Temporal por Línea de Tiempo ("Revision")
+                        </h3>
+                        <span class="text-[10px] text-slate-400">Desglose por Tipo_Mantto</span>
+                    </div>
+                    <div class="flex-1 min-h-[260px]">
+                        <canvas id="timelineChart"></canvas>
+                    </div>
+                </div>
+
+                <!-- 4. Comparativo por Tipo Mantto -->
+                <div class="bg-brand-card border border-brand-border rounded-xl p-4 shadow-sm flex flex-col">
+                    <div class="flex items-center justify-between mb-3">
+                        <h3 class="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-2">
+                            <i data-lucide="pie-chart" class="w-4 h-4 text-amber-400"></i> Proporción por Tipo Mantto
+                        </h3>
+                        <span class="text-[10px] text-slate-400">PM01 / PM02 / PM03</span>
+                    </div>
+                    <div class="flex-1 min-h-[260px] flex items-center justify-center">
+                        <canvas id="donutPMChart"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <!-- SECCIÓN DE GRÁFICOS - FILA 3 -->
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-5">
+                
+                <!-- 5. Distribución Multiplanta -->
+                <div class="bg-brand-card border border-brand-border rounded-xl p-4 shadow-sm flex flex-col">
+                    <div class="flex items-center justify-between mb-3">
+                        <h3 class="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-2">
+                            <i data-lucide="building-2" class="w-4 h-4 text-cyan-400"></i> Distribución de Gasto por Planta
+                        </h3>
+                        <span class="text-[10px] text-slate-400">Comparativa Sedes</span>
+                    </div>
+                    <div class="flex-1 min-h-[260px]">
+                        <canvas id="plantaChart"></canvas>
+                    </div>
+                </div>
+
+                <!-- 6. Top 10 Equipos Financieros -->
+                <div class="lg:col-span-2 bg-brand-card border border-brand-border rounded-xl p-4 shadow-sm flex flex-col">
+                    <div class="flex items-center justify-between mb-3">
+                        <h3 class="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-2">
+                            <i data-lucide="list-ordered" class="w-4 h-4 text-emerald-400"></i> Top 10 Equipos de Mayor Impacto Financiero
+                        </h3>
+                        <span class="text-[10px] text-slate-400">Heatmap por Precio_R</span>
+                    </div>
+                    <div class="overflow-x-auto custom-scrollbar flex-1">
+                        <table class="w-full text-left text-xs text-slate-300">
+                            <thead class="bg-slate-800/80 text-slate-400 uppercase text-[10px]">
+                                <tr>
+                                    <th class="p-2.5">Nombre del Equipo</th>
+                                    <th class="p-2.5">Planta</th>
+                                    <th class="p-2.5 text-center">Frecuencia (N)</th>
+                                    <th class="p-2.5 text-center">PM Predominante</th>
+                                    <th class="p-2.5 text-right">Costo Total (Precio_R)</th>
+                                </tr>
+                            </thead>
+                            <tbody id="topEquiposTableBody" class="divide-y divide-slate-800">
+                                <!-- Filas dinámicas -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+            </div>
+
+        </main>
+    </div>
+
+    <!-- LOGICA JAVASCRIPT Y ARCHITECTURE BI -->
+    <script>
+        // DATASET BASE EMBEBIDO (Resumen Agregado del Dataset Original)
+        let rawData = [
+            // BOMBA
+            { Revision: "2024-P02", Planta: "Callao", Tipo_Mantto: "PM02", Categoria: "BOMBA", MaterialServicio: "Material", Equipo: "BOMBA CENTRIFUGA P-01", N: 420, Costo: 68500.50 },
+            { Revision: "2024-P02", Planta: "Chicama", Tipo_Mantto: "PM03", Categoria: "BOMBA", MaterialServicio: "Servicio", Equipo: "BOMBA VACIO V-02", N: 380, Costo: 54200.00 },
+            { Revision: "2025-P01", Planta: "Chimbote", Tipo_Mantto: "PM02", Categoria: "BOMBA", MaterialServicio: "Material", Equipo: "BOMBA PISTON HP", N: 510, Costo: 89400.20 },
+            { Revision: "2025-P01", Planta: "Huacho", Tipo_Mantto: "PM01", Categoria: "BOMBA", MaterialServicio: "Servicio", Equipo: "BOMBA SUMERGIBLE", N: 210, Costo: 48500.00 },
+            { Revision: "2025-V01", Planta: "Tambo de Mora", Tipo_Mantto: "PM02", Categoria: "BOMBA", MaterialServicio: "Material", Equipo: "BOMBA LOBULAR", N: 610, Costo: 104311.40 },
+            { Revision: "2025-V02", Planta: "Callao", Tipo_Mantto: "PM03", Categoria: "BOMBA", MaterialServicio: "Material", Equipo: "BOMBA CENTRIFUGA P-02", N: 450, Costo: 100000.00 },
+            
+            // SECADOR INDIRECTO
+            { Revision: "2024-P02", Planta: "Chimbote", Tipo_Mantto: "PM02", Categoria: "SECADOR INDIRECTO", MaterialServicio: "Servicio", Equipo: "SECADOR ROTATUBOS 01", N: 310, Costo: 85000.00 },
+            { Revision: "2025-P01", Planta: "Callao", Tipo_Mantto: "PM02", Categoria: "SECADOR INDIRECTO", MaterialServicio: "Material", Equipo: "SECADOR DISCUS 02", N: 280, Costo: 78500.45 },
+            { Revision: "2025-V01", Planta: "Huacho", Tipo_Mantto: "PM03", Categoria: "SECADOR INDIRECTO", MaterialServicio: "Servicio", Equipo: "SECADOR ROTATUBOS 02", N: 390, Costo: 92100.00 },
+            { Revision: "2025-V02", Planta: "Chicama", Tipo_Mantto: "PM01", Categoria: "SECADOR INDIRECTO", MaterialServicio: "Material", Equipo: "SECADOR INDIRECTO MAIN", N: 150, Costo: 68188.00 },
+
+            // CALDERA
+            { Revision: "2024-P02", Planta: "Huacho", Tipo_Mantto: "PM03", Categoria: "CALDERA", MaterialServicio: "Servicio", Equipo: "CALDERA ACUOTUBULAR C1", N: 220, Costo: 95000.00 },
+            { Revision: "2025-P01", Planta: "Tambo de Mora", Tipo_Mantto: "PM02", Categoria: "CALDERA", MaterialServicio: "Material", Equipo: "CALDERA PIROTUBULAR C2", N: 340, Costo: 110102.30 },
+            { Revision: "2025-V01", Planta: "Chimbote", Tipo_Mantto: "PM02", Categoria: "CALDERA", MaterialServicio: "Servicio", Equipo: "CALDERA AUXILIAR", N: 290, Costo: 110000.00 },
+
+            // MOTOR
+            { Revision: "2024-P02", Planta: "Chicama", Tipo_Mantto: "PM02", Categoria: "MOTOR", MaterialServicio: "Material", Equipo: "MOTOR ELECTRICO 250HP", N: 850, Costo: 65000.00 },
+            { Revision: "2025-P01", Planta: "Callao", Tipo_Mantto: "PM03", Categoria: "MOTOR", MaterialServicio: "Material", Equipo: "MOTORREDUCTOR PRINCIPAL", N: 720, Costo: 52680.15 },
+            { Revision: "2025-V01", Planta: "Tambo de Mora", Tipo_Mantto: "PM01", Categoria: "MOTOR", MaterialServicio: "Servicio", Equipo: "MOTOR TRIFASICO 100HP", N: 410, Costo: 45000.00 },
+            { Revision: "2025-V02", Planta: "Huacho", Tipo_Mantto: "PM02", Categoria: "MOTOR", MaterialServicio: "Material", Equipo: "MOTOR SECUNDARIO", N: 680, Costo: 55000.00 },
+
+            // TRANSPORTADOR HELICOIDAL
+            { Revision: "2024-P02", Planta: "Tambo de Mora", Tipo_Mantto: "PM02", Categoria: "TRANSPORTADOR HELICOIDAL", MaterialServicio: "Material", Equipo: "HELICOIDAL HARINA 01", N: 620, Costo: 58000.00 },
+            { Revision: "2025-P01", Planta: "Chimbote", Tipo_Mantto: "PM03", Categoria: "TRANSPORTADOR HELICOIDAL", MaterialServicio: "Servicio", Equipo: "HELICOIDAL PESCADO 02", N: 590, Costo: 62021.20 },
+            { Revision: "2025-V01", Planta: "Callao", Tipo_Mantto: "PM02", Categoria: "TRANSPORTADOR HELICOIDAL", MaterialServicio: "Material", Equipo: "HELICOIDAL EVACUADOR", N: 510, Costo: 54000.00 },
+            { Revision: "2025-V02", Planta: "Chicama", Tipo_Mantto: "PM01", Categoria: "TRANSPORTADOR HELICOIDAL", MaterialServicio: "Servicio", Equipo: "HELICOIDAL RESIDUOS", N: 320, Costo: 40000.00 },
+
+            // OTROS
+            { Revision: "2025-P01", Planta: "Huacho", Tipo_Mantto: "PM02", Categoria: "CENTRIFUGA", MaterialServicio: "Material", Equipo: "CENTRIFUGA DE ACEITE", N: 410, Costo: 125000.00 },
+            { Revision: "2025-V01", Planta: "Chimbote", Tipo_Mantto: "PM03", Categoria: "VALVULA", MaterialServicio: "Servicio", Equipo: "VALVULA DE CONTROL FLUIDO", N: 1100, Costo: 98000.00 },
+            { Revision: "2025-V02", Planta: "Callao", Tipo_Mantto: "PM02", Categoria: "TABLERO ELECTRICO", MaterialServicio: "Material", Equipo: "TABLERO DE DISTRIBUCION MT", N: 300, Costo: 87000.00 },
+            { Revision: "2025-V02", Planta: "Tambo de Mora", Tipo_Mantto: "PM03", Categoria: "COMPRESOR", MaterialServicio: "Servicio", Equipo: "COMPRESOR TORNILLO AIR", N: 280, Costo: 112000.00 },
+            { Revision: "2025-P01", Planta: "Chicama", Tipo_Mantto: "PM02", Categoria: "PRENSA", MaterialServicio: "Material", Equipo: "PRENSA DOBLE TORNILLO", N: 390, Costo: 145000.00 },
+            { Revision: "2024-P02", Planta: "Huacho", Tipo_Mantto: "PM01", Categoria: "RED UTLIDADES", MaterialServicio: "Servicio", Equipo: "LINEA DE VAPOR ALTA", N: 180, Costo: 82000.00 },
+            { Revision: "2025-V01", Planta: "Callao", Tipo_Mantto: "PM03", Categoria: "SISTEMA SEPARADOR", MaterialServicio: "Material", Equipo: "SEPARADOR CENTRIFUGO", N: 470, Costo: 105000.00 },
+            { Revision: "2025-V02", Planta: "Chimbote", Tipo_Mantto: "PM02", Categoria: "PIPING & TUBERIAS", MaterialServicio: "Servicio", Equipo: "TUBERIA AGUA SALADA", N: 920, Costo: 74000.00 }
+        ];
+
+        // Estado Global de Filtros
+        let selectedPMs = ['PM01', 'PM02', 'PM03'];
+        let selectedRevision = "";
+        let selectedPlanta = "";
+        let selectedCategoria = "";
+        let selectedMatServ = "";
+
+        // Chart Instances
+        let paretoChartInst, jackKnifeChartInst, timelineChartInst, donutPMChartInst, plantaChartInst, gaugeChartInst, sparklineInst;
+
+        // Inicialización
+        window.addEventListener('DOMContentLoaded', () => {
+            lucide.createIcons();
+            populateDropdowns();
+            initGaugeChart();
+            initSparkline();
+            renderCharts();
+            
+            // Listener Carga de Archivos
+            document.getElementById('fileInput').addEventListener('change', handleFileUpload);
+        });
+
+        function populateDropdowns() {
+            const revisions = [...new Set(rawData.map(d => d.Revision))].sort();
+            const plantas = [...new Set(rawData.map(d => d.Planta))].sort();
+            const categorias = [...new Set(rawData.map(d => d.Categoria))].sort();
+
+            const selRev = document.getElementById('selectRevision');
+            selRev.innerHTML = '<option value="">Todas las Revisiones</option>';
+            revisions.forEach(r => selRev.innerHTML += `<option value="${r}">${r}</option>`);
+
+            const selPlanta = document.getElementById('selectPlanta');
+            selPlanta.innerHTML = '<option value="">Todas las Plantas</option>';
+            plantas.forEach(p => selPlanta.innerHTML += `<option value="${p}">${p}</option>`);
+
+            const selCat = document.getElementById('selectCategoria');
+            selCat.innerHTML = '<option value="">Todas las Categorías</option>';
+            categorias.forEach(c => selCat.innerHTML += `<option value="${c}">${c}</option>`);
+        }
+
+        function filterData() {
+            return rawData.filter(d => {
+                const matchPM = selectedPMs.includes(d.Tipo_Mantto);
+                const matchRev = !selectedRevision || d.Revision === selectedRevision;
+                const matchPlanta = !selectedPlanta || d.Planta === selectedPlanta;
+                const matchCat = !selectedCategoria || d.Categoria === selectedCategoria;
+                const matchMS = !selectedMatServ || d.MaterialServicio === selectedMatServ;
+                return matchPM && matchRev && matchPlanta && matchCat && matchMS;
+            });
+        }
+
+        function formatUSD(amount) {
+            if (amount >= 1e6) return `$ ${(amount / 1e6).toFixed(2)}M`;
+            if (amount >= 1e3) return `$ ${(amount / 1e3).toFixed(1)}K`;
+            return `$ ${amount.toFixed(2)}`;
+        }
+
+        function updateKPIs(filtered) {
+            const totalCost = filtered.reduce((acc, curr) => acc + curr.Costo, 0);
+            const totalOrders = filtered.reduce((acc, curr) => acc + curr.N, 0);
+            const avgCost = totalOrders > 0 ? totalCost / totalOrders : 0;
+
+            document.getElementById('kpi-total-cost').innerText = formatUSD(totalCost);
+            document.getElementById('kpi-avg-cost').innerText = `$ ${avgCost.toFixed(2)}`;
+            document.getElementById('kpi-total-orders').innerText = totalOrders.toLocaleString('es-PE');
+
+            const pm01Cnt = filtered.filter(d => d.Tipo_Mantto === 'PM01').reduce((a, b) => a + b.N, 0);
+            const pm02Cnt = filtered.filter(d => d.Tipo_Mantto === 'PM02').reduce((a, b) => a + b.N, 0);
+            const pm03Cnt = filtered.filter(d => d.Tipo_Mantto === 'PM03').reduce((a, b) => a + b.N, 0);
+
+            document.getElementById('kpi-pm01-cnt').innerText = `PM01: ${pm01Cnt.toLocaleString()}`;
+            document.getElementById('kpi-pm02-cnt').innerText = `PM02: ${pm02Cnt.toLocaleString()}`;
+            document.getElementById('kpi-pm03-cnt').innerText = `PM03: ${pm03Cnt.toLocaleString()}`;
+
+            // Actualizar Gauge Pareto Concentración
+            const catGroup = {};
+            filtered.forEach(d => {
+                catGroup[d.Categoria] = (catGroup[d.Categoria] || 0) + d.Costo;
+            });
+            const sortedCats = Object.entries(catGroup).sort((a,b) => b[1] - a[1]);
+            const top20Count = Math.max(1, Math.ceil(sortedCats.length * 0.2));
+            const top20Cost = sortedCats.slice(0, top20Count).reduce((a, b) => a + b[1], 0);
+            const pct = totalCost > 0 ? ((top20Cost / totalCost) * 100).toFixed(1) : 0;
+
+            document.getElementById('gaugePct').innerText = `${pct}%`;
+            if (gaugeChartInst) {
+                gaugeChartInst.data.datasets[0].data = [pct, 100 - pct];
+                gaugeChartInst.update();
+            }
+
+            // Smart Insight Text
+            const topCatName = sortedCats.length > 0 ? sortedCats[0][0] : "N/A";
+            const topCatVal = sortedCats.length > 0 ? formatUSD(sortedCats[0][1]) : "$0";
+            document.getElementById('smartInsightText').innerHTML = 
+                `La categoría <strong class="text-white">${topCatName}</strong> representa el mayor gasto acumulado en <span class="text-blue-300 font-mono">Precio_R</span> con <strong class="text-amber-400">${topCatVal} USD</strong> distribuido en el alcance seleccionado. El costo medio por orden actual es de <strong class="text-emerald-400">$ ${avgCost.toFixed(2)} USD</strong>.`;
+        }
+
+        // INIT GAUGE CHART
+        function initGaugeChart() {
+            const ctx = document.getElementById('gaugeChart').getContext('2d');
+            gaugeChartInst = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    datasets: [{
+                        data: [68.4, 31.6],
+                        backgroundColor: ['#f59e0b', '#334155'],
+                        borderWidth: 0
+                    }]
+                },
+                options: {
+                    cutout: '75%',
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { tooltip: { enabled: false } }
+                }
+            });
+        }
+
+        // INIT SPARKLINE
+        function initSparkline() {
+            const ctx = document.getElementById('sparklineChart').getContext('2d');
+            sparklineInst = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: ['P01', 'P02', 'V01', 'V02'],
+                    datasets: [{
+                        data: [650000, 890000, 1100000, 1144945],
+                        borderColor: '#2563eb',
+                        borderWidth: 2,
+                        fill: false,
+                        pointRadius: 0
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: { x: { display: false }, y: { display: false } }
+                }
+            });
+        }
+
+        // RENDERING ALL CHARTS
+        function renderCharts() {
+            const data = filterData();
+            updateKPIs(data);
+
+            renderPareto(data);
+            renderJackKnife(data);
+            renderTimeline(data);
+            renderDonutPM(data);
+            renderPlanta(data);
+            renderTopEquipos(data);
+        }
+
+        // 1. PARETO
+        function renderPareto(data) {
+            const catMap = {};
+            data.forEach(d => { catMap[d.Categoria] = (catMap[d.Categoria] || 0) + d.Costo; });
+            const sorted = Object.entries(catMap).sort((a, b) => b[1] - a[1]);
+            
+            const labels = sorted.map(d => d[0]);
+            const costs = sorted.map(d => d[1]);
+            const total = costs.reduce((a, b) => a + b, 0);
+            
+            let cum = 0;
+            const cumPct = costs.map(c => {
+                cum += c;
+                return total > 0 ? (cum / total) * 100 : 0;
+            });
+
+            if (paretoChartInst) paretoChartInst.destroy();
+            const ctx = document.getElementById('paretoChart').getContext('2d');
+            
+            paretoChartInst = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [
+                        {
+                            label: 'Costo Total ($)',
+                            data: costs,
+                            backgroundColor: '#2563eb',
+                            order: 2
+                        },
+                        {
+                            label: '% Acumulado',
+                            data: cumPct,
+                            type: 'line',
+                            borderColor: '#ef4444',
+                            borderWidth: 2,
+                            yAxisID: 'y1',
+                            order: 1
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { labels: { color: '#94a3b8', font: { size: 10 } } } },
+                    scales: {
+                        x: { ticks: { color: '#94a3b8', font: { size: 9 } }, grid: { display: false } },
+                        y: { ticks: { color: '#94a3b8', font: { size: 10 } }, grid: { color: '#334155' } },
+                        y1: { position: 'right', min: 0, max: 100, ticks: { color: '#ef4444', font: { size: 10 } }, grid: { display: false } }
+                    }
+                }
+            });
+        }
+
+        // 2. JACK-KNIFE
+        function renderJackKnife(data) {
+            const eqMap = {};
+            data.forEach(d => {
+                if(!eqMap[d.Equipo]) eqMap[d.Equipo] = { N: 0, Costo: 0, Cat: d.Categoria };
+                eqMap[d.Equipo].N += d.N;
+                eqMap[d.Equipo].Costo += d.Costo;
+            });
+
+            const points = Object.keys(eqMap).map(eq => ({
+                x: eqMap[eq].N,
+                y: eqMap[eq].N > 0 ? (eqMap[eq].Costo / eqMap[eq].N) : 0,
+                label: eq
+            }));
+
+            const medianX = points.length > 0 ? points.map(p => p.x).sort((a,b)=>a-b)[Math.floor(points.length/2)] : 500;
+            const medianY = points.length > 0 ? points.map(p => p.y).sort((a,b)=>a-b)[Math.floor(points.length/2)] : 150;
+
+            if (jackKnifeChartInst) jackKnifeChartInst.destroy();
+            const ctx = document.getElementById('jackKnifeChart').getContext('2d');
+
+            jackKnifeChartInst = new Chart(ctx, {
+                type: 'scatter',
+                data: {
+                    datasets: [{
+                        label: 'Equipos',
+                        data: points,
+                        backgroundColor: points.map(p => {
+                            if(p.x >= medianX && p.y >= medianY) return '#ef4444'; // Crítico
+                            if(p.x < medianX && p.y >= medianY) return '#f59e0b'; // Agudo
+                            if(p.x >= medianX && p.y < medianY) return '#3b82f6'; // Crónico
+                            return '#10b981'; // Bajo Impacto
+                        }),
+                        pointRadius: 6
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        tooltip: {
+                            callbacks: {
+                                label: (ctx) => `${ctx.raw.label}: N=${ctx.raw.x}, Costo Medio=$${ctx.raw.y.toFixed(1)}`
+                            }
+                        },
+                        legend: { display: false }
+                    },
+                    scales: {
+                        x: { title: { display: true, text: 'Frecuencia (N)', color: '#94a3b8' }, ticks: { color: '#94a3b8' }, grid: { color: '#334155' } },
+                        y: { title: { display: true, text: 'Costo Medio ($)', color: '#94a3b8' }, ticks: { color: '#94a3b8' }, grid: { color: '#334155' } }
+                    }
+                }
+            });
+        }
+
+        // 3. EVOLUCIÓN TEMPORAL
+        function renderTimeline(data) {
+            const revs = [...new Set(rawData.map(d => d.Revision))].sort();
+            const pm01Data = revs.map(r => data.filter(d => d.Revision === r && d.Tipo_Mantto === 'PM01').reduce((a,b)=>a+b.Costo, 0));
+            const pm02Data = revs.map(r => data.filter(d => d.Revision === r && d.Tipo_Mantto === 'PM02').reduce((a,b)=>a+b.Costo, 0));
+            const pm03Data = revs.map(r => data.filter(d => d.Revision === r && d.Tipo_Mantto === 'PM03').reduce((a,b)=>a+b.Costo, 0));
+
+            if (timelineChartInst) timelineChartInst.destroy();
+            const ctx = document.getElementById('timelineChart').getContext('2d');
+
+            timelineChartInst = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: revs,
+                    datasets: [
+                        { label: 'PM01 (Correctivo)', data: pm01Data, borderColor: '#ef4444', backgroundColor: 'rgba(239,68,68,0.2)', fill: true, tension: 0.3 },
+                        { label: 'PM02 (Preventivo)', data: pm02Data, borderColor: '#2563eb', backgroundColor: 'rgba(37,99,235,0.2)', fill: true, tension: 0.3 },
+                        { label: 'PM03 (Correctivo NP)', data: pm03Data, borderColor: '#10b981', backgroundColor: 'rgba(16,185,129,0.2)', fill: true, tension: 0.3 }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { labels: { color: '#94a3b8', font: { size: 10 } } } },
+                    scales: {
+                        x: { ticks: { color: '#94a3b8' }, grid: { display: false } },
+                        y: { ticks: { color: '#94a3b8' }, grid: { color: '#334155' } }
+                    }
+                }
+            });
+        }
+
+        // 4. DONUT PM
+        function renderDonutPM(data) {
+            const pm01 = data.filter(d => d.Tipo_Mantto === 'PM01').reduce((a,b)=>a+b.Costo,0);
+            const pm02 = data.filter(d => d.Tipo_Mantto === 'PM02').reduce((a,b)=>a+b.Costo,0);
+            const pm03 = data.filter(d => d.Tipo_Mantto === 'PM03').reduce((a,b)=>a+b.Costo,0);
+
+            if (donutPMChartInst) donutPMChartInst.destroy();
+            const ctx = document.getElementById('donutPMChart').getContext('2d');
+
+            donutPMChartInst = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: ['PM01 (Correctivo)', 'PM02 (Preventivo)', 'PM03 (Correctivo NP)'],
+                    datasets: [{
+                        data: [pm01, pm02, pm03],
+                        backgroundColor: ['#ef4444', '#2563eb', '#10b981'],
+                        borderWidth: 2,
+                        borderColor: '#1e293b'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { position: 'bottom', labels: { color: '#94a3b8', font: { size: 10 } } } }
+                }
+            });
+        }
+
+        // 5. PLANTA CHART
+        function renderPlanta(data) {
+            const plantas = [...new Set(rawData.map(d => d.Planta))].sort();
+            const pm01Data = plantas.map(p => data.filter(d => d.Planta === p && d.Tipo_Mantto === 'PM01').reduce((a,b)=>a+b.Costo, 0));
+            const pm02Data = plantas.map(p => data.filter(d => d.Planta === p && d.Tipo_Mantto === 'PM02').reduce((a,b)=>a+b.Costo, 0));
+            const pm03Data = plantas.map(p => data.filter(d => d.Planta === p && d.Tipo_Mantto === 'PM03').reduce((a,b)=>a+b.Costo, 0));
+
+            if (plantaChartInst) plantaChartInst.destroy();
+            const ctx = document.getElementById('plantaChart').getContext('2d');
+
+            plantaChartInst = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: plantas,
+                    datasets: [
+                        { label: 'PM01', data: pm01Data, backgroundColor: '#ef4444' },
+                        { label: 'PM02', data: pm02Data, backgroundColor: '#2563eb' },
+                        { label: 'PM03', data: pm03Data, backgroundColor: '#10b981' }
+                    ]
+                },
+                options: {
+                    indexAxis: 'y',
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { labels: { color: '#94a3b8', font: { size: 10 } } } },
+                    scales: {
+                        x: { stacked: true, ticks: { color: '#94a3b8' }, grid: { color: '#334155' } },
+                        y: { stacked: true, ticks: { color: '#94a3b8' }, grid: { display: false } }
+                    }
+                }
+            });
+        }
+
+        // 6. TOP 10 EQUIPOS TABLE
+        function renderTopEquipos(data) {
+            const eqMap = {};
+            data.forEach(d => {
+                if(!eqMap[d.Equipo]) eqMap[d.Equipo] = { Planta: d.Planta, N: 0, Costo: 0, PMs: {} };
+                eqMap[d.Equipo].N += d.N;
+                eqMap[d.Equipo].Costo += d.Costo;
+                eqMap[d.Equipo].PMs[d.Tipo_Mantto] = (eqMap[d.Equipo].PMs[d.Tipo_Mantto] || 0) + d.Costo;
+            });
+
+            const sorted = Object.entries(eqMap)
+                .map(([name, info]) => {
+                    const topPM = Object.entries(info.PMs).sort((a,b) => b[1] - a[1])[0]?.[0] || 'N/A';
+                    return { name, ...info, topPM };
+                })
+                .sort((a,b) => b.Costo - a.Costo)
+                .slice(0, 10);
+
+            const tbody = document.getElementById('topEquiposTableBody');
+            tbody.innerHTML = '';
+
+            const maxCost = sorted.length > 0 ? sorted[0].Costo : 1;
+
+            sorted.forEach(eq => {
+                const intensity = Math.min(100, Math.max(15, (eq.Costo / maxCost) * 100));
+                const tr = document.createElement('tr');
+                tr.className = 'hover:bg-slate-800/50 transition';
+                tr.innerHTML = `
+                    <td class="p-2.5 font-medium text-white">${eq.name}</td>
+                    <td class="p-2.5 text-slate-400">${eq.Planta}</td>
+                    <td class="p-2.5 text-center font-mono text-slate-300">${eq.N.toLocaleString()}</td>
+                    <td class="p-2.5 text-center">
+                        <span class="px-2 py-0.5 rounded text-[10px] font-bold ${eq.topPM==='PM01'?'bg-red-500/20 text-red-400':eq.topPM==='PM02'?'bg-blue-500/20 text-blue-400':'bg-emerald-500/20 text-emerald-400'}">
+                            ${eq.topPM}
+                        </span>
+                    </td>
+                    <td class="p-2.5 text-right font-mono font-bold text-emerald-400" style="background-color: rgba(16, 185, 129, ${intensity / 400})">
+                        $ ${eq.Costo.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        // ACCIONES DE FILTRO
+        function togglePMFilter(pm) {
+            const btn = document.getElementById(`btn-${pm}`);
+            if(selectedPMs.includes(pm)) {
+                if(selectedPMs.length === 1) return; // Mantener al menos uno
+                selectedPMs = selectedPMs.filter(p => p !== pm);
+                btn.classList.remove('bg-blue-600', 'text-white', 'border-blue-500');
+                btn.classList.add('bg-slate-800', 'text-slate-300', 'border-slate-600');
+            } else {
+                selectedPMs.push(pm);
+                btn.classList.add('bg-blue-600', 'text-white', 'border-blue-500');
+                btn.classList.remove('bg-slate-800', 'text-slate-300', 'border-slate-600');
+            }
+            applyFilters();
+        }
+
+        function toggleMatServ(type) {
+            const btnM = document.getElementById('btn-Mat');
+            const btnS = document.getElementById('btn-Serv');
+
+            if(selectedMatServ === type) {
+                selectedMatServ = "";
+                btnM.classList.remove('bg-blue-600', 'text-white');
+                btnS.classList.remove('bg-blue-600', 'text-white');
+            } else {
+                selectedMatServ = type;
+                if(type === 'Material') {
+                    btnM.classList.add('bg-blue-600', 'text-white');
+                    btnS.classList.remove('bg-blue-600', 'text-white');
+                } else {
+                    btnS.classList.add('bg-blue-600', 'text-white');
+                    btnM.classList.remove('bg-blue-600', 'text-white');
+                }
+            }
+            applyFilters();
+        }
+
+        function applyFilters() {
+            selectedRevision = document.getElementById('selectRevision').value;
+            selectedPlanta = document.getElementById('selectPlanta').value;
+            selectedCategoria = document.getElementById('selectCategoria').value;
+
+            const badge = document.getElementById('activeFilterBadge');
+            if(selectedRevision || selectedPlanta || selectedCategoria || selectedMatServ || selectedPMs.length < 3) {
+                badge.classList.remove('hidden');
+            } else {
+                badge.classList.add('hidden');
+            }
+
+            renderCharts();
+        }
+
+        function resetFilters() {
+            selectedPMs = ['PM01', 'PM02', 'PM03'];
+            ['PM01', 'PM02', 'PM03'].forEach(pm => {
+                const btn = document.getElementById(`btn-${pm}`);
+                btn.classList.add('bg-blue-600', 'text-white', 'border-blue-500');
+                btn.classList.remove('bg-slate-800', 'text-slate-300', 'border-slate-600');
+            });
+
+            selectedMatServ = "";
+            document.getElementById('btn-Mat').classList.remove('bg-blue-600', 'text-white');
+            document.getElementById('btn-Serv').classList.remove('bg-blue-600', 'text-white');
+
+            document.getElementById('selectRevision').value = "";
+            document.getElementById('selectPlanta').value = "";
+            document.getElementById('selectCategoria').value = "";
+
+            applyFilters();
+        }
+
+        // CÓDIGO DE LECTURA DE NUEVA BASE DE DATOS (EXCEL/CSV)
+        function handleFileUpload(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(evt) {
+                const data = new Uint8Array(evt.target.result);
+                const workbook = XLSX.read(data, {type: 'array'});
+                const firstSheetName = workbook.SheetNames[0];
+                const worksheet = workbook.Sheets[firstSheetName];
+                const json = XLSX.utils.sheet_to_json(worksheet);
+
+                // Mapear columnas dinámicamente y filtrar PM01, PM02, PM03
+                const newParsedData = [];
+                json.forEach(row => {
+                    const pm = row['Tipo_Mantto'] || row['Tipo Mantto'] || row['TIPO_MANTTO'];
+                    const precio = parseFloat(row['Precio_R'] || row['Precio R'] || row['PRECIO_R'] || 0);
+
+                    if (['PM01', 'PM02', 'PM03'].includes(pm)) {
+                        newParsedData.push({
+                            Revision: String(row['Revision'] || row['Revisión'] || '2026-N/A'),
+                            Planta: String(row['Planta'] || row['Sede'] || 'Sede Principal'),
+                            Tipo_Mantto: pm,
+                            Categoria: String(row['Categoria'] || row['Catégoria'] || row['CATEGORIA'] || 'VARIOS'),
+                            MaterialServicio: String(row['Material o Servicio'] || row['Tipo Insumo'] || 'Material'),
+                            Equipo: String(row['Nombre_Equipo'] || row['Equipo'] || 'EQUIPO GENERAL'),
+                            N: 1,
+                            Costo: precio
+                        });
+                    }
+                });
+
+                if(newParsedData.length > 0) {
+                    rawData = newParsedData;
+                    populateDropdowns();
+                    resetFilters();
+                    document.getElementById('lastUpdateDate').innerText = new Date().toLocaleDateString('es-PE');
+                    alert(`¡Base de datos cargada exitosamente! ${newParsedData.length} registros PM01/PM02/PM03 procesados.`);
+                } else {
+                    alert('No se encontraron registros válidos con PM01, PM02 o PM03 en el archivo cargado.');
+                }
+            };
+            reader.readAsArrayBuffer(file);
+        }
+
+       // THEME TOGGLE
+        function toggleTheme() {
+            const html = document.documentElement;
+            const themeIcon = document.getElementById('theme-icon');
+            if (html.classList.contains('dark')) {
+                html.classList.remove('dark');
+                document.body.className = "bg-slate-100 text-slate-800 min-h-screen font-sans antialiased transition-colors duration-300";
+                themeIcon.setAttribute('data-lucide', 'moon');
+            } else {
+                html.classList.add('dark');
+                document.body.className = "bg-slate-900 text-slate-100 min-h-screen font-sans antialiased transition-colors duration-300";
+                themeIcon.setAttribute('data-lucide', 'sun');
+            }
+            if (window.lucide) lucide.createIcons();
+        }
+
+    </script>
+</body>
+</html>
